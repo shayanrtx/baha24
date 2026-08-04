@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Daily Market Baha24 Topbar
  * Description: Advanced live price topbar for Baha24 API with symbol manager, drag & drop, live preview, cache fallback and responsive controls.
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: Daily Market
  * Text Domain: dm-baha24-topbar
  */
@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 final class DM_Baha24_Topbar_V12 {
 
-    const VERSION         = '1.2.0';
+    const VERSION         = '1.3.0';
     const OPT_SETTINGS    = 'dm_baha24_topbar_settings';
     const OPT_DATA        = 'dm_baha24_topbar_data_fallback';
     const OPT_STATUS      = 'dm_baha24_topbar_status';
@@ -65,8 +65,10 @@ final class DM_Baha24_Topbar_V12 {
 
             'desktop_height'      => 45,
             'mobile_height'       => 40,
-            'speed'               => 32,
+            'speed'               => 60,
             'z_index'             => 99999,
+            'loop_mode'           => 0, // 0 = normal, 1 = infinite loop
+            'above_all'           => 0, // 0 = normal, 1 = create own space without affecting layout
 
             'bg_color'            => '#121212',
             'border_color'        => '#d4af37',
@@ -185,8 +187,10 @@ final class DM_Baha24_Topbar_V12 {
 
         $out['desktop_height'] = max( 30, min( 90, absint( $in['desktop_height'] ?? $d['desktop_height'] ) ) );
         $out['mobile_height']  = max( 30, min( 80, absint( $in['mobile_height'] ?? $d['mobile_height'] ) ) );
-        $out['speed']          = max( 8, min( 120, absint( $in['speed'] ?? $d['speed'] ) ) );
+        $out['speed']          = max( 10, min( 300, absint( $in['speed'] ?? $d['speed'] ) ) );
         $out['z_index']        = max( 1, min( 2147483647, absint( $in['z_index'] ?? $d['z_index'] ) ) );
+        $out['loop_mode']      = empty( $in['loop_mode'] ) ? 0 : 1;
+        $out['above_all']      = empty( $in['above_all'] ) ? 0 : 1;
 
         $out['bg_color']       = $this->hex( $in['bg_color'] ?? $d['bg_color'], $d['bg_color'] );
         $out['border_color']   = $this->hex( $in['border_color'] ?? $d['border_color'], $d['border_color'] );
@@ -350,8 +354,8 @@ final class DM_Baha24_Topbar_V12 {
 
             <div class="dm-head">
                 <div>
-                    <h1>Baha24 Topbar v1.2</h1>
-                    <div class="dm-sub">نوار قیمت حرفه‌ای با مدیریت نماد، کش، پیش‌نمایش زنده و کنترل نمایش.</div>
+                    <h1>Baha24 Topbar v1.3</h1>
+                    <div class="dm-sub">نوار قیمت حرفه‌ای با مدیریت نماد، کش، پیش‌نمایش زنده و کنترل نمایش. (نسخه ۱.۳: اضافه شدن تکرار بی‌نهایت، فضای مستقل، بهبود سرعت)</div>
                 </div>
             </div>
 
@@ -470,8 +474,9 @@ final class DM_Baha24_Topbar_V12 {
                                         <input type="number" id="dm-mobile-height" name="<?php echo esc_attr( self::OPT_SETTINGS ); ?>[mobile_height]" value="<?php echo esc_attr( $s['mobile_height'] ); ?>" min="30" max="80">
                                     </p>
                                     <p>
-                                        سرعت:
-                                        <input type="number" id="dm-speed" name="<?php echo esc_attr( self::OPT_SETTINGS ); ?>[speed]" value="<?php echo esc_attr( $s['speed'] ); ?>" min="8" max="120">
+                                        سرعت (ثانیه):
+                                        <input type="number" id="dm-speed" name="<?php echo esc_attr( self::OPT_SETTINGS ); ?>[speed]" value="<?php echo esc_attr( $s['speed'] ); ?>" min="10" max="300">
+                                        <div class="dm-muted">عدد بیشتر = سرعت کمتر. عدد کمتر = سرعت بیشتر.</div>
                                     </p>
                                 </div>
                             </div>
@@ -480,6 +485,22 @@ final class DM_Baha24_Topbar_V12 {
                                 <div class="dm-label">z-index</div>
                                 <div>
                                     <input type="number" name="<?php echo esc_attr( self::OPT_SETTINGS ); ?>[z_index]" value="<?php echo esc_attr( $s['z_index'] ); ?>">
+                                </div>
+                            </div>
+
+                            <div class="dm-row">
+                                <div class="dm-label">تکرار نوار (Loop)</div>
+                                <div>
+                                    <label><input type="checkbox" name="<?php echo esc_attr( self::OPT_SETTINGS ); ?>[loop_mode]" value="1" <?php checked( $s['loop_mode'], 1 ); ?>> تکرار بی‌نهایت - وقتی نوار تمام شد دوباره از اول شروع شود</label>
+                                    <div class="dm-muted">اگر فعال باشد، محتوا چند بار کپی می‌شود تا حلقه پیوسته و بدون پرش ایجاد شود.</div>
+                                </div>
+                            </div>
+
+                            <div class="dm-row">
+                                <div class="dm-label">فضای مستقل در بالای صفحه</div>
+                                <div>
+                                    <label><input type="checkbox" name="<?php echo esc_attr( self::OPT_SETTINGS ); ?>[above_all]" value="1" <?php checked( $s['above_all'], 1 ); ?>> نوار فضای خودش را بسازد و روی محتوای دیگر نباشد</label>
+                                    <div class="dm-muted">اگر فعال باشد، نوار به صورت inline قرار می‌گیرد و فضای آن از محتوای صفحه کم نمی‌شود. اگر sticky هم فعال باشد، همچنان فضا رزرو می‌کند.</div>
                                 </div>
                             </div>
 
@@ -1151,13 +1172,32 @@ final class DM_Baha24_Topbar_V12 {
 
         $id       = 'dm-baha24-' . wp_rand( 10000, 99999 );
         $mode_cls = $s['mode'] === 'static' ? 'dm-baha24-static' : 'dm-baha24-ticker';
-        $fix_cls  = $sticky ? 'dm-baha24-fixed' : 'dm-baha24-inline';
+        
+        // Determine positioning class based on above_all and sticky settings
+        if ( ! empty( $s['above_all'] ) ) {
+            // Create own space - inline block that doesn't overlap content
+            $fix_cls = 'dm-baha24-above-all';
+        } elseif ( $sticky ) {
+            $fix_cls = 'dm-baha24-fixed';
+        } else {
+            $fix_cls = 'dm-baha24-inline';
+        }
+        
         $dev_cls  = 'dm-baha24-device-' . $s['device_visibility'];
 
         $items_html = implode( "\n", $items );
 
+        // For loop mode, duplicate content multiple times for seamless infinite scroll
         if ( $s['mode'] === 'ticker' ) {
-            $items_html .= "\n" . implode( "\n", $items );
+            if ( ! empty( $s['loop_mode'] ) ) {
+                // Duplicate 3-4 times for smooth looping
+                $items_html .= "\n" . implode( "\n", $items );
+                $items_html .= "\n" . implode( "\n", $items );
+                $items_html .= "\n" . implode( "\n", $items );
+            } else {
+                // Original behavior: duplicate once
+                $items_html .= "\n" . implode( "\n", $items );
+            }
         }
 
         ob_start();
@@ -1194,6 +1234,17 @@ final class DM_Baha24_Topbar_V12 {
                 box-shadow:0 8px 24px rgba(0,0,0,.18);
             }
             body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-fixed{top:32px}
+            
+            /* Above-all mode: creates its own space without overlapping content */
+            #<?php echo esc_attr( $id ); ?>.dm-baha24-above-all{
+                position:relative;
+                top:auto;
+                left:auto;
+                right:auto;
+                margin-bottom:<?php echo absint( $s['desktop_height'] ); ?>px;
+            }
+            body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-above-all{margin-top:32px}
+            
             #<?php echo esc_attr( $id ); ?> .dm-baha24-track{
                 display:flex;
                 align-items:center;
@@ -1287,12 +1338,18 @@ final class DM_Baha24_Topbar_V12 {
             </div>
         </div>
 
-        <?php if ( $sticky && ! $preview ) : ?>
+        <?php if ( ( $sticky || ! empty( $s['above_all'] ) ) && ! $preview ) : ?>
             <script>
             (function(){
                 function applyOffset(){
                     var bar = document.getElementById('<?php echo esc_js( $id ); ?>');
-                    if(!bar || !bar.classList.contains('dm-baha24-fixed')) return;
+                    if(!bar) return;
+                    
+                    // Only apply offset for fixed or above-all modes
+                    var isFixed = bar.classList.contains('dm-baha24-fixed');
+                    var isAboveAll = bar.classList.contains('dm-baha24-above-all');
+                    
+                    if(!isFixed && !isAboveAll) return;
 
                     var style = window.getComputedStyle(bar);
                     if(style.display === 'none') return;

@@ -258,7 +258,7 @@ final class DM_Baha24_Topbar_V12 {
     }
 
     private function sanitize_csv( $raw ) {
-        $raw = strtoupper( sanitize_text_field( $raw ) );
+        $raw = strtoupper( trim( wp_unslash( $raw ) ) );
         $raw = preg_replace( '/[^A-Z0-9_,\s]/', '', $raw );
         $parts = preg_split( '/[\s,]+/', $raw );
         $parts = array_filter( array_map( 'trim', $parts ) );
@@ -275,7 +275,7 @@ final class DM_Baha24_Topbar_V12 {
         $out = [];
 
         foreach ( $symbols as $symbol ) {
-            $symbol = strtoupper( sanitize_text_field( $symbol ) );
+            $symbol = strtoupper( trim( wp_unslash( sanitize_text_field( $symbol ) ) ) );
             $symbol = preg_replace( '/[^A-Z0-9_]/', '', $symbol );
             if ( $symbol !== '' ) $out[] = $symbol;
         }
@@ -1096,10 +1096,10 @@ final class DM_Baha24_Topbar_V12 {
 
         if ( $s['page_scope'] === 'home' && ! ( is_front_page() || is_home() ) ) return;
 
-        // Only render early if above_all mode is enabled
-        if ( empty( $s['above_all'] ) ) return;
+        // Render early for sticky mode to ensure it's at the very top
+        if ( empty( $s['sticky'] ) && empty( $s['above_all'] ) ) return;
 
-        echo $this->generate_html( false, false );
+        echo $this->generate_html( ! empty( $s['sticky'] ), false );
     }
 
     public function render_auto_topbar() {
@@ -1109,8 +1109,8 @@ final class DM_Baha24_Topbar_V12 {
 
         if ( $s['page_scope'] === 'home' && ! ( is_front_page() || is_home() ) ) return;
 
-        // Skip if already rendered early in wp_head for above_all mode
-        if ( ! empty( $s['above_all'] ) ) return;
+        // Skip if already rendered early in wp_head for sticky or above_all mode
+        if ( ! empty( $s['sticky'] ) || ! empty( $s['above_all'] ) ) return;
 
         echo $this->generate_html( ! empty( $s['sticky'] ), false );
     }
@@ -1258,6 +1258,9 @@ final class DM_Baha24_Topbar_V12 {
                 box-shadow:0 8px 24px rgba(0,0,0,.18);
             }
             body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-fixed{top:32px}
+            @media(max-width:782px){
+                body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-fixed{top:46px}
+            }
             
             /* Above-all mode: creates its own space without overlapping content */
             #<?php echo esc_attr( $id ); ?>.dm-baha24-above-all{
@@ -1271,9 +1274,20 @@ final class DM_Baha24_Topbar_V12 {
             }
             body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-above-all{margin-top:32px}
             
+            /* Sticky + above_all combined: fixed at top but reserves space */
+            #<?php echo esc_attr( $id ); ?>.dm-baha24-fixed.dm-baha24-above-all{
+                position:fixed;
+                top:0;
+            }
+            body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-fixed.dm-baha24-above-all{top:32px}
+            @media(max-width:782px){
+                body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-fixed.dm-baha24-above-all{top:46px}
+            }
+            
             #<?php echo esc_attr( $id ); ?> .dm-baha24-track{
                 display:flex;
                 align-items:center;
+                height:100%;
                 white-space:nowrap;
                 will-change:transform;
             }
@@ -1331,6 +1345,7 @@ final class DM_Baha24_Topbar_V12 {
             }
             @media(max-width:782px){
                 body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-fixed{top:46px}
+                body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-fixed.dm-baha24-above-all{top:46px}
             }
             @media(max-width:768px){
                 #<?php echo esc_attr( $id ); ?>{
@@ -1397,6 +1412,9 @@ final class DM_Baha24_Topbar_V12 {
                 }
 
                 window.addEventListener('resize', applyOffset);
+                
+                // Re-apply on scroll to ensure sticky stays at top
+                window.addEventListener('scroll', applyOffset);
             })();
             </script>
         <?php endif; ?>

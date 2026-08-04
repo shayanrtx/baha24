@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Daily Market Baha24 Topbar
  * Description: Advanced live price topbar for Baha24 API with symbol manager, drag & drop, live preview, cache fallback and responsive controls.
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: Daily Market
  * Text Domain: dm-baha24-topbar
  */
@@ -11,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 
 final class DM_Baha24_Topbar_V12 {
 
-    const VERSION         = '1.3.0';
+    const VERSION         = '1.4.0';
     const OPT_SETTINGS    = 'dm_baha24_topbar_settings';
     const OPT_DATA        = 'dm_baha24_topbar_data_fallback';
     const OPT_STATUS      = 'dm_baha24_topbar_status';
@@ -39,7 +39,8 @@ final class DM_Baha24_Topbar_V12 {
         add_filter( 'cron_schedules', [ $this, 'cron_schedules' ] );
         add_action( self::CRON_HOOK, [ $this, 'fetch_prices' ] );
 
-        add_action( 'wp_footer', [ $this, 'render_auto_topbar' ] );
+        add_action( 'wp_body_open', [ $this, 'render_auto_topbar' ] );
+        add_action( 'wp_head', [ $this, 'render_auto_topbar_early' ], 1 );
         add_shortcode( 'dm_baha24_topbar', [ $this, 'shortcode' ] );
 
         register_activation_hook( __FILE__, [ __CLASS__, 'activate' ] );
@@ -355,7 +356,7 @@ final class DM_Baha24_Topbar_V12 {
             <div class="dm-head">
                 <div>
                     <h1>Baha24 Topbar v1.3</h1>
-                    <div class="dm-sub">نوار قیمت حرفه‌ای با مدیریت نماد، کش، پیش‌نمایش زنده و کنترل نمایش. (نسخه ۱.۳: اضافه شدن تکرار بی‌نهایت، فضای مستقل، بهبود سرعت)</div>
+                    <div class="dm-sub">نوار قیمت حرفه‌ای با مدیریت نماد، کش، پیش‌نمایش زنده و کنترل نمایش. (نسخه ۱.۴: رفع مشکل نمایش ارزهای انتخابی، چسبیدن به بالاترین قسمت سایت، بهبود انیمیشن و سرعت)</div>
                 </div>
             </div>
 
@@ -584,7 +585,14 @@ final class DM_Baha24_Topbar_V12 {
                                 <div class="dm-label">نمادهای انتخاب‌شده</div>
                                 <div>
                                     <ul id="dm-selected-list" class="dm-selected-list">
-                                        <?php foreach ( $s['symbols'] as $symbol ) : ?>
+                                        <?php 
+                                        $order_symbols = !empty( $s['selected_order'] ) 
+                                            ? array_filter( explode( ',', $s['selected_order'] ) )
+                                            : $s['symbols'];
+                                        foreach ( $order_symbols as $symbol ) : 
+                                            $symbol = trim( strtoupper( $symbol ) );
+                                            if ( empty( $symbol ) ) continue;
+                                        ?>
                                             <li data-symbol="<?php echo esc_attr( $symbol ); ?>">
                                                 <strong><?php echo esc_html( $symbol ); ?></strong>
                                                 <span class="dm-pill">Drag</span>
@@ -1081,12 +1089,28 @@ final class DM_Baha24_Topbar_V12 {
         update_option( self::OPT_LOGS, $logs, false );
     }
 
+    public function render_auto_topbar_early() {
+        $s = $this->settings();
+
+        if ( empty( $s['enabled'] ) || empty( $s['auto_display'] ) ) return;
+
+        if ( $s['page_scope'] === 'home' && ! ( is_front_page() || is_home() ) ) return;
+
+        // Only render early if above_all mode is enabled
+        if ( empty( $s['above_all'] ) ) return;
+
+        echo $this->generate_html( false, false );
+    }
+
     public function render_auto_topbar() {
         $s = $this->settings();
 
         if ( empty( $s['enabled'] ) || empty( $s['auto_display'] ) ) return;
 
         if ( $s['page_scope'] === 'home' && ! ( is_front_page() || is_home() ) ) return;
+
+        // Skip if already rendered early in wp_head for above_all mode
+        if ( ! empty( $s['above_all'] ) ) return;
 
         echo $this->generate_html( ! empty( $s['sticky'] ), false );
     }
@@ -1238,10 +1262,12 @@ final class DM_Baha24_Topbar_V12 {
             /* Above-all mode: creates its own space without overlapping content */
             #<?php echo esc_attr( $id ); ?>.dm-baha24-above-all{
                 position:relative;
-                top:auto;
-                left:auto;
-                right:auto;
-                margin-bottom:<?php echo absint( $s['desktop_height'] ); ?>px;
+                top:0;
+                left:0;
+                right:0;
+                margin:0;
+                padding:0;
+                display:block;
             }
             body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-above-all{margin-top:32px}
             
@@ -1300,8 +1326,8 @@ final class DM_Baha24_Topbar_V12 {
                 display:inline-block;
             }
             @keyframes dmBaha24TickerRTL{
-                0%{transform:translateX(100vw)}
-                100%{transform:translateX(-100%)}
+                0%{transform:translateX(0)}
+                100%{transform:translateX(-50%)}
             }
             @media(max-width:782px){
                 body.admin-bar #<?php echo esc_attr( $id ); ?>.dm-baha24-fixed{top:46px}
@@ -1338,18 +1364,17 @@ final class DM_Baha24_Topbar_V12 {
             </div>
         </div>
 
-        <?php if ( ( $sticky || ! empty( $s['above_all'] ) ) && ! $preview ) : ?>
+        <?php if ( $sticky && ! $preview ) : ?>
             <script>
             (function(){
                 function applyOffset(){
                     var bar = document.getElementById('<?php echo esc_js( $id ); ?>');
                     if(!bar) return;
                     
-                    // Only apply offset for fixed or above-all modes
+                    // Only apply offset for fixed mode
                     var isFixed = bar.classList.contains('dm-baha24-fixed');
-                    var isAboveAll = bar.classList.contains('dm-baha24-above-all');
                     
-                    if(!isFixed && !isAboveAll) return;
+                    if(!isFixed) return;
 
                     var style = window.getComputedStyle(bar);
                     if(style.display === 'none') return;
